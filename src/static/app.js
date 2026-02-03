@@ -20,11 +20,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        // Build participants section HTML
+        const participantsHTML = details.participants && details.participants.length
+          ? `<ul class="participants-list no-bullets">${details.participants
+              .map(p => {
+                const initials = p
+                  .split(" ")
+                  .map(n => n[0] || "")
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase();
+                return `<li class="participant-item"><span class="participant-avatar">${initials}</span><span class="participant-name">${p}</span><button class="delete-participant" title="Remove" data-activity="${name}" data-email="${p}">💥</button></li>`;
+              })
+              .join("")}</ul>`
+          : `<p class="participants-empty"><em>No participants yet</em></p>`;
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+
+          <div class="participants-section">
+            <h5>Participants</h5>
+            ${participantsHTML}
+          </div>
         `;
 
         activitiesList.appendChild(activityCard);
@@ -34,6 +54,37 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
+      });
+
+      // Add delete event listeners
+      activitiesList.querySelectorAll('.delete-participant').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const activity = btn.getAttribute('data-activity');
+          const email = btn.getAttribute('data-email');
+          const participantItem = btn.closest('.participant-item');
+          
+          if (!confirm(`Remove ${email} from ${activity}?`)) return;
+          
+          // Trigger throw animation
+          participantItem.classList.add('throw-out');
+          
+          // Wait for animation to finish before removing
+          setTimeout(async () => {
+            try {
+              const response = await fetch(`/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`, {
+                method: 'DELETE',
+              });
+              const result = await response.json();
+              if (response.ok) {
+                fetchActivities();
+              } else {
+                alert(result.detail || 'Failed to remove participant.');
+              }
+            } catch (err) {
+              alert('Failed to remove participant.');
+            }
+          }, 600);
+        });
       });
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
@@ -62,6 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
